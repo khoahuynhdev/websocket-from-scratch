@@ -4,6 +4,15 @@ import crypto from "crypto";
 // ref: https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
 const PORT = 1337;
 const WEBSOCKET_MAGIC_STRING_KEY = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+const SEVEN_BITS_INTEGER_MARKER = 125;
+const SIXTEEN_BITS_INTEGER_MARKER = 126;
+const SIXTYFOUR_BITS_INTEGER_MARKER = 127;
+
+const MASK_KEY_BYTES_LENGTH = 4;
+// parseInt('10000000', 2)
+// how much is 1 bit in Javascript
+// we have 1 byte = 8 bit
+const FIRST_BIT = 128;
 
 const server = createServer((req, res) => {
   res.writeHead(200);
@@ -19,6 +28,42 @@ function onSocketUpgrade(req, socket, head) {
   console.log(`${webClientSocketKey} connected!`);
   const headers = prepareHandShakeHeaders(webClientSocketKey);
   socket.write(headers);
+  socket.on("readable", () => onSocketReadable(socket));
+}
+
+function onSocketReadable(socket) {
+  // consume optcode (firstbyte)
+  // 1 = 1 byte = 8 bits
+  socket.read(1);
+  const [markerAndPayloadLength] = socket.read(1);
+  // because the first bit is always 1 for client-to-server messages
+  // u can substract one bit (128 or '10000000') from this byte to get rid of
+  // the MASK bit
+  const lengthIndicatorInBits = markerAndPayloadLength - FIRST_BIT;
+
+  let messageLength = 0;
+  if (lengthIndicatorInBits <= SEVEN_BITS_INTEGER_MARKER) {
+    messageLength = lengthIndicatorInBits;
+  } else {
+    throw new Error(
+      "your message is too long! we don't handle 64-length message "
+    );
+  }
+
+  const maskKey = socket.read(MASK_KEY_BYTES_LENGTH);
+  const encoded = socket.read(messageLength);
+  const decoded = unmask(encoded, maskKey);
+  const received = decoded.toString("utf8");
+  const data = JSON.parse(received);
+  console.log("message received!", data);
+}
+
+function unmask(encodedBuffer, maskKey) {
+  const finalBuffer = Buffer.from(encodedBuffer);
+  for (let i = 0; i < encodedBuffer.length; i++) {
+    finalBuffer[i] = encodedBuffer[i] ^ maskKey[i % MASK_KEY_BYTES_LENGTH];
+  }
+  return finalBuffer;
 }
 
 function prepareHandShakeHeaders(id) {
