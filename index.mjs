@@ -8,6 +8,8 @@ const SEVEN_BITS_INTEGER_MARKER = 125;
 const SIXTEEN_BITS_INTEGER_MARKER = 126;
 const SIXTYFOUR_BITS_INTEGER_MARKER = 127;
 
+const MAXIMUM_SIXTEENBITS_INTEGER = 2 ** 16;
+
 const MASK_KEY_BYTES_LENGTH = 4;
 // parseInt('10000000', 2)
 // how much is 1 bit in Javascript
@@ -44,6 +46,8 @@ function onSocketReadable(socket) {
   let messageLength = 0;
   if (lengthIndicatorInBits <= SEVEN_BITS_INTEGER_MARKER) {
     messageLength = lengthIndicatorInBits;
+  } else if (lengthIndicatorInBits === SIXTEEN_BITS_INTEGER_MARKER) {
+    messageLength = socket.read(2).readUint16BE(0);
   } else {
     throw new Error(
       "your message is too long! we don't handle 64-length message "
@@ -56,6 +60,11 @@ function onSocketReadable(socket) {
   const received = decoded.toString("utf8");
   const data = JSON.parse(received);
   console.log("message received!", data);
+  const msg = JSON.stringify({
+    message: data,
+    at: new Date().toISOString(),
+  });
+  sendMessage(msg, socket);
 }
 
 function unmask(encodedBuffer, maskKey) {
@@ -77,11 +86,63 @@ function unmask(encodedBuffer, maskKey) {
   for (let i = 0; i < encodedBuffer.length; i++) {
     finalBuffer[i] = encodedBuffer[i] ^ maskKey[i % MASK_KEY_BYTES_LENGTH];
     const logger = {
+      unmaskingCalc: `${toBinary(encodedBuffer[i])} ^ ${toBinary(
+        maskKey[i % MASK_KEY_BYTES_LENGTH]
+      )} = ${toBinary(finalBuffer[i])}`,
       decoded: getCharFromBinary(finalBuffer[i]),
     };
     console.log(logger);
   }
   return finalBuffer;
+}
+
+function sendMessage(msg, socket) {
+  const dataFrame = prepareMessage(msg);
+  socket.write(dataFrame);
+}
+
+function prepareMessage(message) {
+  const msg = Buffer.from(message);
+  const messageSize = msg.length;
+
+  let dataFrameBuffer;
+
+  // 0x80 === 128 in binary
+  // '0x' + Math.abs(128).toString() == 0x80
+  const firstByte = 0x80 | 0x01; // single Frame + text
+  if (messageSize <= SEVEN_BITS_INTEGER_MARKER) {
+    const bytes = [firstByte];
+    dataFrameBuffer = Buffer.from(bytes.concat(messageSize));
+  } else if (messageSize <= MAXIMUM_SIXTEENBITS_INTEGER) {
+    const offsetFourBytes = 4;
+    const target = Buffer.allocUnsafe(offsetFourBytes)
+    target[0] = firstByte;
+    target[1] = SIXTEEN_BITS_INTEGER_MARKER | 0x0; // just to know the mask
+    target.writeUint16BE(messageSize, 2); // content length is 2 bytes
+    dataFrameBuffer = target;
+
+    // alloc 4 bytes
+    // [0] - 128 + 1 - 10000001 = 0x81 fin + optcode
+    // [1] - 126 + 0 - payload length marker + mask indicator
+    // [2] 0 - content length
+    // [3] 171 - content length
+    // [4 - ..] - the message itself
+  } else {
+    throw new Error("Message too long buddy");
+  }
+  const totalLength = dataFrameBuffer.byteLength + messageSize;
+  const dataFrameResponse = concat([dataFrameBuffer, msg], totalLength);
+  return dataFrameResponse;
+}
+
+function concat(bufferList, totalLength) {
+  const target = Buffer.allocUnsafe(totalLength);
+  let offset = 0;
+  for (const buffer of bufferList) {
+    target.set(buffer, offset);
+    offset += buffer.length;
+  }
+  return target;
 }
 
 function prepareHandShakeHeaders(id) {

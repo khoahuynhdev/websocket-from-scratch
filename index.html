@@ -1,33 +1,38 @@
 <! DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Web Socket Client | khoahuynhdev</title>
   </head>
   <body>
     <output id="messages"></output>
     <script>
       const messages = document.getElementById("messages");
-      const socket = new WebSocket('ws://localhost:1337');
+      const socket = new WebSocket("ws://localhost:1337");
       socket.onopen = (event) => {
-        console.log('WebSocket connected!')
-        const id = Math.round(Math.random() * 100)
-        console.log('sending...', id)
+        console.log("WebSocket connected!");
+        const id = Math.round(Math.random() * 100);
+        console.log("sending...", id);
         const data = JSON.stringify({
           id,
           name: `[${id}], Khoa`,
           addess: {
-            street: 'my street',
-            number: 30 * id
+            street: "my street",
+            number: 30 * id,
           },
-          profession: 'developer'
-        })
-        socket.send(data)
-      }
-      socket.onmessage = (msg) => console.log('I got a message!', msg)
-      socket.onerror = (err) => console.error(`WebSocket error`, err)
-      socket.onclose = (event) => console.log('Disconnected from WebSocket server')
+          profession: "developer",
+        });
+        socket.send(data);
+      };
+      socket.onmessage = (msg) => {
+        const message = msg.data;
+        console.log("I got a message!", msg);
+        messages.innerHTML += `<br /> ${message}`;
+      };
+      socket.onerror = (err) => console.error(`WebSocket error`, err);
+      socket.onclose = (event) =>
+        console.log("Disconnected from WebSocket server");
     </script>
   </body>
 </html>
