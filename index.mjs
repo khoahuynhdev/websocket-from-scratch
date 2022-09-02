@@ -8,11 +8,13 @@ const server = createServer((req, res) => {
 }).listen(PORT, () => {
   console.log("Server listen to ", PORT);
 });
-server.on("upgrade", (req, socket, head) => {
+server.on("upgrade", onSocketUpgrade);
+
+function onSocketUpgrade(req, socket, head) {
   // Client will send the header: Sec-WebSocket-Key
   const { "sec-websocket-key": webClientSocketKey } = req.headers;
   console.log({ webClientSocketKey });
-});
+}
 
 [
   // error handling
