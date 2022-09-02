@@ -2,20 +2,23 @@ import { createServer } from "http";
 
 const PORT = 1337;
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
   res.writeHead(200);
-  throw new Error("test");
   res.end("Hi there!");
-}).listen(
-  (PORT,
-  () => {
-    console.log(("Server liste to ", PORT));
-  })
-);
+}).listen(PORT, () => {
+  console.log("Server listen to ", PORT);
+});
+server.on("upgrade", (req, socket, head) => {
+  // Client will send the header: Sec-WebSocket-Key
+  const { "sec-websocket-key": webClientSocketKey } = req.headers;
+  console.log({ webClientSocketKey });
+});
 
-// error handling
+[
+  // error handling
 
-["uncaughtException", "unhandledRejection"].forEach((event) => {
+  ("uncaughtException", "unhandledRejection"),
+].forEach((event) => {
   process.on(event, (err) => {
     console.error(
       `Something bad happened! event: ${event}, msg: ${err.stack || err}`
