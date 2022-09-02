@@ -59,9 +59,27 @@ function onSocketReadable(socket) {
 }
 
 function unmask(encodedBuffer, maskKey) {
+  // @NOTE: because the maskKey has only 4 byte
+  // @NOTE: index % 4 == 0, 1, 2, 3 = index bits needed to decode the message
+  // XOR ^
+  // return 1 if both are different
+  // return 0 if both are equals
+  // (71).toString(2).padStart(8, "0") = 01000111
+  // (53).toString(2).padStart(8, "0") = 00110101
+  //                                     01110010
+  //
+  // String.fromCharCode(parseInt('01110010', 2))
   const finalBuffer = Buffer.from(encodedBuffer);
+  const fillWithEightZeros = (t) => t.padStart(8, "0");
+  const toBinary = (t) => fillWithEightZeros(t.toString(2));
+  const fromBinaryToDecimal = (t) => parseInt(toBinary(t), 2);
+  const getCharFromBinary = (t) => String.fromCharCode(fromBinaryToDecimal(t));
   for (let i = 0; i < encodedBuffer.length; i++) {
     finalBuffer[i] = encodedBuffer[i] ^ maskKey[i % MASK_KEY_BYTES_LENGTH];
+    const logger = {
+      decoded: getCharFromBinary(finalBuffer[i]),
+    };
+    console.log(logger);
   }
   return finalBuffer;
 }
