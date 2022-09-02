@@ -17,22 +17,30 @@ function onSocketUpgrade(req, socket, head) {
   const { "sec-websocket-key": webClientSocketKey } = req.headers;
   console.log(`${webClientSocketKey} connected!`);
   const headers = prepareHandShakeHeaders(webClientSocketKey);
-  console.log({ headers })
+  socket.write(headers);
 }
 
 function prepareHandShakeHeaders(id) {
   const acceptKey = createSocketAccept(id);
-  return acceptKey;
+  const headers = [
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${acceptKey}`,
+    "",
+  ]
+    .map((line) => line.concat("\r\n"))
+    .join(""); // HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade ...
+  return headers;
 }
 
-
 /**
-  * create sha1 + concat the id to the magic string and return base64 result
-  */
+ * create sha1 + concat the id to the magic string and return base64 result
+ */
 function createSocketAccept(id) {
   const shaum = crypto.createHash("sha1");
   shaum.update(id + WEBSOCKET_MAGIC_STRING_KEY);
-  return shaum.digest('base64');
+  return shaum.digest("base64");
 }
 
 [
